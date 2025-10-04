@@ -1,0 +1,44 @@
+# # # # # # # # # # # # # # # # # # # # # # # #
+# This .gitignore is based on your project   #
+# connecting to Google Drive with Python.     #
+# # # # # # # # # # # # # # # # # # # # # # # #
+
+# --- Credentials and Secret Files ---
+# NEVER commit your credentials or token files. This is the most important part.
+credentials.json
+*.pickle
+token_*.pickle
+
+# --- Python General ---
+# Compiled Python files and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+# Replace 'venv' with the name of your virtual environment folder if it's different
+venv/
+.venv/
+env/
+.env/
+
+# --- IDE and Editor Config ---
+# Visual Studio Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# --- Data Files ---
+# Ignoring Excel files as they are often data, not source code.
+# If you have template/sample data you WANT to commit, you can remove this.
+*.xlsx
+*.csv
+
+# --- Operating System Files ---
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
