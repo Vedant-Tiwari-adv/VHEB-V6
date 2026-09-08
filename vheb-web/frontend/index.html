@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VHEB — Building Ledger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d9488'/%3E%3Ctext x='16' y='22' font-family='Segoe UI,Arial,sans-serif' font-size='16' font-weight='700' fill='%23fff' text-anchor='middle'%3EV%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#0d9488">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-mark">VHEB</div>
+    <p class="login-sub">Building utility ledger</p>
+    <label class="field-label" for="token-input">Admin token</label>
+    <input id="token-input" type="password" autocomplete="off" placeholder="Paste your ADMIN_TOKEN">
+    <button id="login-btn" class="btn btn-primary btn-block" type="button" style="margin-top:.5rem">Unlock ledger</button>
+    <p id="login-error" class="login-error" hidden></p>
+  </div>
+</div>
+
+<div id="app-shell" class="app-shell" hidden>
+  <header class="topbar">
+    <span class="tb-title" id="tb-title">VHEB</span>
+    <button class="tb-lock" id="logout-btn-m" type="button">Lock</button>
+  </header>
+
+  <nav class="spine">
+    <div class="spine-mark">VHEB</div>
+    <a href="#/dashboard" data-route="dashboard" class="spine-tab"><span class="ic">◆</span><span>Home</span></a>
+    <a href="#/readings"  data-route="readings"  class="spine-tab"><span class="ic">＋</span><span>New bill</span></a>
+    <a href="#/history"   data-route="history"   class="spine-tab"><span class="ic">≣</span><span>History</span></a>
+    <a href="#/meters"    data-route="meters"    class="spine-tab"><span class="ic">⊞</span><span>Meters</span></a>
+    <a href="#/settings"  data-route="settings"  class="spine-tab"><span class="ic">⚙</span><span>Settings</span></a>
+    <button id="logout-btn" class="spine-logout" type="button"><span class="ic">⏻</span><span>Lock</span></button>
+  </nav>
+
+  <main id="page" class="page"></main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

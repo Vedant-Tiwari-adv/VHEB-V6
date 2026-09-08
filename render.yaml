@@ -1,0 +1,46 @@
+# Render Blueprint -- https://render.com/docs/blueprint-spec
+# Render only reads render.yaml from the REPO ROOT, so it lives here (not in
+# vheb-web/). In the Render dashboard: New -> Blueprint -> connect this repo
+# -> Apply. It creates one free web service that serves BOTH the API and the
+# static frontend. Fill in every `sync: false` var by hand in the dashboard
+# afterwards -- never put real secrets in this file.
+services:
+  - type: web
+    name: vheb-web
+    runtime: python
+    plan: free
+    rootDir: vheb-web/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: SPREADSHEET_ID
+        sync: false
+      - key: DRIVE_PHOTOS_FOLDER_ID
+        sync: false
+      - key: ADMIN_WHATSAPP_NUMBER
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_TEMPLATE_NAME
+        value: monthly_bill
+      - key: WHATSAPP_TEMPLATE_LANG
+        value: en
+      - key: WHATSAPP_API_VERSION
+        value: v21.0
+      - key: DEFAULT_MARGIN_PCT
+        value: "7"
+      - key: BUILDING_NAME
+        value: VHEB
+      - key: CURRENCY_SYMBOL
+        value: Rs
+      - key: TIMEZONE
+        value: Asia/Kolkata
