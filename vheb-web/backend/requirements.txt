@@ -5,7 +5,12 @@ google-auth==2.37.0
 google-api-python-client==2.157.0
 pydantic==2.10.4
 python-dotenv==1.0.1
-scikit-learn==1.6.0
-numpy==2.2.1
 requests==2.32.3
 python-multipart==0.0.20
+
+# scikit-learn + numpy are OPTIONAL -- only the RandomForest price model in
+# app/ml_pricing.py uses them, and that needs 12+ months of history before it
+# activates (until then it falls back to the plain heuristic formula, which
+# needs neither). They're in requirements-dev.txt so tests can still exercise
+# the model locally. Add them back here only if you want the ML model on the
+# deployed server AND your host builds their wheels quickly.

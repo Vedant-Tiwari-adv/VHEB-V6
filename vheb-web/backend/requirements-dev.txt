@@ -1,3 +1,8 @@
 -r requirements.txt
 pytest==8.3.4
 httpx==0.28.1
+
+# Optional ML price model deps -- kept here (not in requirements.txt) so the
+# deployed server builds fast. Local dev/tests still exercise the model.
+scikit-learn==1.6.0
+numpy==2.2.1
