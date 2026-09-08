@@ -91,6 +91,34 @@ def test_send_bill_success_sends_free_form_text_to_admin_number():
     get_settings.cache_clear()
 
 
+def test_prefer_template_skips_the_free_path():
+    get_settings.cache_clear()
+    env = {
+        "ADMIN_WHATSAPP_NUMBER": "+919373834997",
+        "WHATSAPP_TOKEN": "fake-token", "WHATSAPP_PHONE_NUMBER_ID": "123456",
+        "WHATSAPP_TEMPLATE_NAME": "monthly_bill",
+    }
+    with patch.dict("os.environ", env, clear=False):
+        get_settings.cache_clear()
+        with patch("app.whatsapp.requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.text = "{}"
+            result = whatsapp.send_bill(
+                tenant_name="Balcony Room", tenant_phone=None, month_label="Sep 2026",
+                units=10, unit_price=8, electricity_amount=80, water_amount=5,
+                total_amount=85, meter_id="flat2", prefer_template=True,
+            )
+    assert result.ok is True and result.method == "template"
+    assert mock_post.call_count == 1  # went straight to template, no free-text attempt
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload["type"] == "template"
+    params = payload["template"]["components"][0]["parameters"]
+    assert len(params) == 6
+    assert params[0]["text"] == "Balcony Room"  # {{1}} is the flat label
+    assert params[5]["text"] == "Rs85.00"       # {{6}} is the total
+    get_settings.cache_clear()
+
+
 def test_send_bill_falls_back_to_template_when_free_text_fails():
     get_settings.cache_clear()
     env = {

@@ -443,7 +443,7 @@ function meterCardHtml(m) {
   <div class="meter-card" data-meter="${m.meter_id}">
     <div class="meter-card-head">
       <span class="meter-card-name">${esc(m.label)}${isMotor ? ' <span class="pill pill-brass">motor</span>' : ""}
-        ${m.tenant_name ? `<span class="meter-card-sub">${esc(m.tenant_name)}</span>` : ""}</span>
+        ${m.meter_number ? `<span class="meter-card-sub">Meter ${esc(m.meter_number)}</span>` : ""}</span>
       <button type="button" class="link-btn" data-toggle-adjust>${r.mode === "manual" || r.lastOverride ? "adjust ▲" : "adjust ▾"}</button>
     </div>
     <div class="meter-card-body">
@@ -480,8 +480,7 @@ function derivedCardHtml(m) {
   return `
   <div class="meter-card" data-meter="${m.meter_id}">
     <div class="meter-card-head">
-      <span class="meter-card-name">${esc(m.label)} <span class="pill pill-brass">no meter</span>
-        ${m.tenant_name ? `<span class="meter-card-sub">${esc(m.tenant_name)}</span>` : ""}</span>
+      <span class="meter-card-name">${esc(m.label)} <span class="pill pill-brass">no meter</span></span>
       <button type="button" class="link-btn" data-toggle-adjust>${r.mode === "manual" || r.price ? "adjust ▲" : "adjust ▾"}</button>
     </div>
     <div class="meter-card-body">
@@ -691,7 +690,7 @@ function wizardStep2() {
               <div>
                 <div class="rowcard-name">${esc(m.label)}
                   <span class="pill pill-brass" data-pin-tag="${m.meter_id}" hidden>pinned</span></div>
-                <div class="rowcard-sub">${esc(m.tenant_name || "")} · ${m.units} units · elec ${fmtMoney(m.electricity_amount)}</div>
+                <div class="rowcard-sub">${meterNumberOf(m.meter_id) ? "Meter " + esc(meterNumberOf(m.meter_id)) + " · " : ""}${m.units} units · elec ${fmtMoney(m.electricity_amount)}</div>
               </div>
               <label class="switch" title="include in water split">
                 <input type="checkbox" data-include="${m.meter_id}" checked>
@@ -810,6 +809,44 @@ function wizardStep2() {
   s2Apply();
 }
 
+/* ------------------------------------------------------ send bills (shared) -- */
+function sendResultsHtml(results) {
+  return `<div class="rowcards">
+    ${results.map((x) => `
+      <div class="rowcard">
+        <div class="rowcard-top">
+          <div class="rowcard-name">${esc(x.tenant_name)}</div>
+          <span class="pill ${x.ok ? "pill-green" : "pill-rust"}">${x.ok ? "sent" : "action needed"}</span>
+        </div>
+        <p class="rowcard-sub" style="margin:.4rem 0 0">${esc(x.detail)}</p>
+        <p style="margin:.5rem 0 0;font-size:.88rem">
+          ${x.self_wa_me_link ? `<a href="${x.self_wa_me_link}" target="_blank" rel="noopener">Open in WhatsApp (to me)</a>` : ""}
+          ${x.forward_wa_me_link ? ` · <a href="${x.forward_wa_me_link}" target="_blank" rel="noopener">Forward to ${esc(x.tenant_name)}</a>` : ""}
+        </p>
+      </div>`).join("")}
+  </div>`;
+}
+
+/** Wire a "send" button to POST a month's bills and render the results into `into`. */
+function wireSendButton(btn, month, into) {
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = "Sending…";
+    try {
+      const res = await api("/api/months/send", { method: "POST", body: { month } });
+      into.innerHTML = `<div class="panel">${sendResultsHtml(res.results)}</div>`;
+      const anyFail = res.results.some((x) => !x.ok);
+      toast(anyFail ? "Some bills need action — see below." : "All bills sent to your WhatsApp.", { error: anyFail });
+    } catch (err) {
+      toast(err.message, { error: true });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  });
+}
+
 /* --------------------------------- STEP 3 ------------------------------- */
 function wizardStep3() {
   const w = state.wizard;
@@ -832,27 +869,7 @@ function wizardStep3() {
     <div class="btn-row"><button id="s3-new" class="btn btn-quiet btn-block">Done — start another month</button></div>
   `;
 
-  body.querySelector("#s3-send").addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    try {
-      const res = await api("/api/months/send", { method: "POST", body: { month: w.month } });
-      body.querySelector("#s3-results").innerHTML = `
-        <div class="panel"><div class="rowcards">
-          ${res.results.map((x) => `
-            <div class="rowcard">
-              <div class="rowcard-top">
-                <div class="rowcard-name">${esc(x.tenant_name)}</div>
-                <span class="pill ${x.ok ? "pill-green" : "pill-rust"}">${x.ok ? "sent" : "action needed"}</span>
-              </div>
-              <p class="rowcard-sub" style="margin:.4rem 0 0">${esc(x.detail)}</p>
-              <p style="margin:.5rem 0 0;font-size:.88rem">
-                ${x.self_wa_me_link ? `<a href="${x.self_wa_me_link}" target="_blank" rel="noopener">Open in WhatsApp (to me)</a>` : ""}
-                ${x.forward_wa_me_link ? ` · <a href="${x.forward_wa_me_link}" target="_blank" rel="noopener">Forward to ${esc(x.tenant_name)}</a>` : ""}
-              </p>
-            </div>`).join("")}
-        </div></div>`;
-    } catch (err) { toast(err.message, { error: true }); e.target.disabled = false; }
-  });
+  wireSendButton(body.querySelector("#s3-send"), w.month, body.querySelector("#s3-results"));
   body.querySelector("#s3-new").addEventListener("click", () => {
     state.wizard = null;
     location.hash = "#/dashboard";
@@ -949,6 +966,9 @@ async function renderHistory() {
       const parts = [];
       for (const mo of list) parts.push(await monthDetailHtml(mo));
       detail.innerHTML = parts.join("") || "<p class='hint'>No month selected.</p>";
+      detail.querySelectorAll("[data-send-month]").forEach((btn) => {
+        wireSendButton(btn, btn.dataset.sendMonth, detail.querySelector(`#send-res-${btn.dataset.sendMonth}`));
+      });
     };
     document.getElementById("hist-month").addEventListener("change", (e) => {
       const v = e.target.value;
@@ -988,6 +1008,10 @@ async function monthDetailHtml(month) {
               ${r.notes ? `<div class="kv"><span class="k warn-text">${esc(r.notes)}</span><span></span></div>` : ""}
             </div>`).join("")}
         </div>
+        <div class="btn-row" style="margin-top:1rem">
+          <button class="btn btn-primary btn-inline" data-send-month="${month}">Send ${monthLabel(month)} bills to my WhatsApp</button>
+        </div>
+        <div id="send-res-${month}" style="margin-top:.8rem"></div>
       </div>`;
   } catch (e) {
     return `<div class="panel warn-text">${esc(month)}: ${esc(e.message)}</div>`;
@@ -997,6 +1021,10 @@ function meterLabel(id) {
   const m = state.meters.find((x) => x.meter_id == id);
   return m ? m.label : id;
 }
+function meterNumberOf(id) {
+  const m = state.meters.find((x) => x.meter_id == id);
+  return m && m.meter_number ? String(m.meter_number) : "";
+}
 
 /* =====================================================================
    SETTINGS
@@ -1004,12 +1032,53 @@ function meterLabel(id) {
 async function renderSettings() {
   setPage(`<h1 class="hide-mobile">Settings</h1><p>Loading…</p>`);
   try {
-    const [settingsDict, backtest] = await Promise.all([
-      api("/api/settings"), api("/api/pricing/backtest").catch(() => null),
+    const [settingsDict, backtest, wa] = await Promise.all([
+      api("/api/settings"),
+      api("/api/pricing/backtest").catch(() => null),
+      api("/api/whatsapp/status").catch(() => null),
     ]);
     state.settings = settingsDict;
+    const waState = !wa ? ["pill-rust", "unknown"]
+      : wa.token_ok === true ? ["pill-green", "connected"]
+      : wa.token_ok === false ? ["pill-rust", "token problem"]
+      : (wa.token && wa.phone_number_id) ? ["pill-brass", "check failed"]
+      : ["pill-rust", "not configured"];
     setPage(`
       <h1 class="hide-mobile">Settings</h1>
+
+      <div class="panel">
+        <h3>WhatsApp <span class="pill ${waState[0]}">${waState[1]}</span></h3>
+        <p class="hint">${wa ? esc(wa.detail || "") : "Could not read status."}</p>
+        <div class="rowcard" style="margin:.6rem 0">
+          <div class="kv"><span class="k">Admin number set</span><span class="v">${wa && wa.admin_number ? "yes" : "no"}</span></div>
+          <div class="kv"><span class="k">Access token set</span><span class="v">${wa && wa.token ? "yes" : "no"}</span></div>
+          <div class="kv"><span class="k">Phone number ID set</span><span class="v">${wa && wa.phone_number_id ? "yes" : "no"}</span></div>
+          <div class="kv"><span class="k">Fallback template</span><span class="v">${wa && wa.template_name ? esc(wa.template_name) : "—"}</span></div>
+        </div>
+        <button id="wa-test" class="btn btn-primary btn-inline">Send a test message to my number</button>
+        <div id="wa-test-res" style="margin-top:.7rem"></div>
+
+        <label class="fl" style="margin-top:1rem">When sending bills
+          <select name="whatsapp_prefer_template" data-setting>
+            <option value="false" ${settingsDict.whatsapp_prefer_template === "true" ? "" : "selected"}>Try the free 24h path first (needs you to message your number first)</option>
+            <option value="true" ${settingsDict.whatsapp_prefer_template === "true" ? "selected" : ""}>Always use the approved template (no "message first" step — small Meta fee)</option>
+          </select>
+        </label>
+        <details style="margin-top:.4rem">
+          <summary class="link-btn">How to approve the template (one time)</summary>
+          <p class="hint" style="margin-top:.5rem">WhatsApp Manager → Message Templates → Create → <strong>Utility</strong> category, language <strong>en</strong>, name <strong>${esc(settingsDict.whatsapp_template_name || "monthly_bill")}</strong>. Body:</p>
+          <div class="bill-card"><pre>*Electricity Bill for {{1}}*
+{{2}}
+
+Units: {{3}}
+Amount: {{4}}
+Water: {{5}}
+*Total: {{6}}*</pre></div>
+          <p class="hint">Add sample values (a flat name, "September 2026", 78, Rs535.86, Rs85.00, Rs620.86) and submit — usually approved within minutes.</p>
+        </details>
+        <p class="hint" style="margin-top:.6rem">Token lives in the server's <code>WHATSAPP_TOKEN</code> env var — a temporary one lasts 24h; a System User token doesn't expire.</p>
+      </div>
+
       <div class="panel">
         <form id="settings-form">
           <div class="grid-2">
@@ -1046,6 +1115,32 @@ async function renderSettings() {
         toast("Settings saved.");
         state.settings = await api("/api/settings");
       } catch (err) { toast(err.message, { error: true }); }
+    });
+
+    document.querySelector('[name="whatsapp_prefer_template"]')?.addEventListener("change", async (e) => {
+      try {
+        await api("/api/settings", { method: "POST", body: { key: "whatsapp_prefer_template", value: e.target.value } });
+        state.settings.whatsapp_prefer_template = e.target.value;
+        toast(e.target.value === "true" ? "Bills will now always use the template." : "Bills will try the free path first.");
+      } catch (err) { toast(err.message, { error: true }); }
+    });
+
+    document.getElementById("wa-test").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      const box = document.getElementById("wa-test-res");
+      box.innerHTML = `<p class="hint">Sending…</p>`;
+      try {
+        const res = await api("/api/whatsapp/test", { method: "POST" });
+        box.innerHTML = `<div class="rowcard">
+          <div class="rowcard-top"><div class="rowcard-name">Test message</div>
+            <span class="pill ${res.ok ? "pill-green" : "pill-rust"}">${res.ok ? "sent" : "failed"}</span></div>
+          <p class="rowcard-sub" style="margin:.4rem 0 0">${esc(res.detail || "")}</p>
+          ${res.self_wa_me_link ? `<p style="margin:.4rem 0 0;font-size:.88rem"><a href="${res.self_wa_me_link}" target="_blank" rel="noopener">Open in WhatsApp (to me)</a></p>` : ""}
+        </div>`;
+        toast(res.ok ? "Test message sent — check your WhatsApp." : "Test failed — see details.", { error: !res.ok });
+      } catch (err) {
+        box.innerHTML = `<p class="warn-text">${esc(err.message)}</p>`;
+      } finally { e.target.disabled = false; }
     });
   } catch (e) {
     setPage(`<h1 class="hide-mobile">Settings</h1><p class="warning-box">${esc(e.message)}</p>`);

@@ -65,6 +65,7 @@ a:hover { text-decoration: underline; }
 p { margin: 0 0 .8rem; }
 .tabular, .num, .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .mono { font-family: var(--mono); }
+code { font-family: var(--mono); font-size: .88em; background: var(--surface-sunk); padding: .1em .35em; border-radius: 5px; }
 .muted { color: var(--ink-2); }
 .hide-mobile { display: revert; }
 @media (max-width: 899px) { .hide-mobile { display: none; } }
@@ -97,8 +98,7 @@ label.fl, .fl { display: block; margin-bottom: 1rem; color: var(--ink-2); font-s
 label.fl > input, label.fl > select, label.fl > textarea { margin-top: .35rem; }
 .field-label { display:block; margin-bottom:.35rem; color: var(--ink-2); font-size:.82rem; font-weight: 550; }
 
-input[type="text"], input[type="password"], input[type="number"], input[type="tel"],
-input[type="search"], select, textarea {
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   width: 100%; min-height: 44px; padding: .6rem .8rem;
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--border-strong); border-radius: var(--r-sm);

@@ -231,10 +231,30 @@ def test_compute_with_manual_last_reading_for_meter_without_history(store, clien
     assert flat3["units"] == 15  # 105 - 90, not 105 - 80
 
 
-def test_send_bills_requires_finalized_month(store, client):
+def test_send_bills_needs_a_saved_month(store, client):
     _seed_meters(client)
     resp = client.post("/api/months/send", json={"month": "2026-09"}, headers=AUTH)
-    assert resp.status_code == 400
+    assert resp.status_code == 400  # nothing saved for 2026-09 yet
+
+
+def test_can_resend_an_older_saved_month(store, client, monkeypatch):
+    _seed_meters(client)
+    from app import whatsapp as wa
+    monkeypatch.setattr(wa, "send_bill", lambda **k: wa.SendResult(
+        k["meter_id"], k["tenant_name"], "text", True, "ok", "https://wa.me/1", None))
+    # 2026-08 was seeded with reading rows but no "finalized" summary status
+    resp = client.post("/api/months/send", json={"month": "2026-08"}, headers=AUTH)
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["results"]) >= 1
+
+
+def test_whatsapp_status_and_test_endpoints(store, client, monkeypatch):
+    from app import whatsapp as wa
+    monkeypatch.setattr(wa, "config_status", lambda: {"token_ok": True, "detail": "Connected."})
+    monkeypatch.setattr(wa, "send_test", lambda: {"ok": True, "detail": "sent", "self_wa_me_link": "https://wa.me/1"})
+    assert client.get("/api/whatsapp/status", headers=AUTH).json()["token_ok"] is True
+    assert client.post("/api/whatsapp/test", headers=AUTH).json()["ok"] is True
+    assert client.get("/api/whatsapp/status").status_code == 401
 
 
 def test_send_bills_after_finalize(store, client, monkeypatch):

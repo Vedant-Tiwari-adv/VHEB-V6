@@ -195,13 +195,23 @@ def finalize_month_route(req: FinalizeMonthRequest):
     return asdict(result)
 
 
+def _num0(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @app.post("/api/months/send", dependencies=[Depends(require_auth)])
 def send_bills_route(req: SendBillsRequest):
-    summary = sheets_client.get_summary(req.month)
-    if not summary or summary.get("status") != "finalized":
-        raise HTTPException(400, "Finalize this month before sending bills.")
+    # Any month that has saved reading rows can be (re)sent -- finalized this
+    # month, or an older one reopened from History. Send is idempotent.
     readings = {r["meter_id"]: r for r in sheets_client.list_readings(req.month)}
+    if not readings:
+        raise HTTPException(400, "No bill has been saved for that month yet.")
     meters = {m["meter_id"]: m for m in sheets_client.list_meters()}
+    prefer_template = str(sheets_client.get_settings_dict().get(
+        "whatsapp_prefer_template", "")).strip().lower() in ("true", "1", "yes")
 
     results = []
     for meter_id, r in readings.items():
@@ -212,13 +222,25 @@ def send_bills_route(req: SendBillsRequest):
             tenant_name=meter.get("label") or meter.get("tenant_name") or meter_id,
             tenant_phone=meter.get("phone_number") or None,
             month_label=req.month,
-            units=float(r["units"]), unit_price=float(r["unit_price"]),
-            electricity_amount=float(r["electricity_amount"]),
-            water_amount=float(r["water_share_amount"] or 0),
-            total_amount=float(r["total_amount"]), meter_id=meter_id,
+            units=_num0(r["units"]), unit_price=_num0(r["unit_price"]),
+            electricity_amount=_num0(r["electricity_amount"]),
+            water_amount=_num0(r.get("water_share_amount")),
+            total_amount=_num0(r["total_amount"]), meter_id=meter_id,
+            prefer_template=prefer_template,
         )
         results.append(asdict(outcome))
     return {"results": results}
+
+
+# --------------------------------------------------------------- WhatsApp --
+@app.get("/api/whatsapp/status", dependencies=[Depends(require_auth)])
+def whatsapp_status():
+    return whatsapp.config_status()
+
+
+@app.post("/api/whatsapp/test", dependencies=[Depends(require_auth)])
+def whatsapp_test():
+    return whatsapp.send_test()
 
 
 # ---------------------------------------------------------------- Pricing --

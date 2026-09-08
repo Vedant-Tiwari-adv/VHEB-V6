@@ -122,14 +122,35 @@ def _send_text(to: str, body: str) -> tuple[bool, str]:
     return True, "Sent as a free-form message (24h window)."
 
 
-def _send_template(to: str, month_label: str, units: float, electricity_amount: float,
-                    water_amount: float, total_amount: float, currency: str) -> tuple[bool, str]:
+# The 6 body parameters the app fills into the approved template, in order.
+# Static structure (headings, newlines, currency, bold) lives in the template
+# itself -- WhatsApp forbids newlines inside a parameter value, so each of
+# these must be a single short line. The template body to submit once in
+# WhatsApp Manager (category: Utility, language: en):
+#
+#     *Electricity Bill for {{1}}*
+#     {{2}}
+#
+#     Units: {{3}}
+#     Amount: {{4}}
+#     Water: {{5}}
+#     *Total: {{6}}*
+#
+def _template_params(*, flat_label: str, month_label: str, units: float,
+                     electricity_amount: float, water_amount: float,
+                     total_amount: float, currency: str) -> list[dict]:
+    values = [
+        flat_label, month_label, f"{units:g}",
+        f"{currency}{electricity_amount:.2f}",
+        f"{currency}{water_amount:.2f}",
+        f"{currency}{total_amount:.2f}",
+    ]
+    return [{"type": "text", "text": v} for v in values]
+
+
+def _send_template(to: str, params: list[dict]) -> tuple[bool, str]:
     settings = get_settings()
     url = f"{GRAPH_BASE}/{settings.whatsapp_api_version}/{settings.whatsapp_phone_number_id}/messages"
-    params = [{"type": "text", "text": v} for v in (
-        month_label, f"{units:g}", f"{currency}{electricity_amount:.2f}",
-        f"{currency}{water_amount:.2f}", f"{currency}{total_amount:.2f}",
-    )]
     payload = {
         "messaging_product": "whatsapp", "to": to, "type": "template",
         "template": {
@@ -142,12 +163,16 @@ def _send_template(to: str, month_label: str, units: float, electricity_amount: 
                           headers={"Authorization": f"Bearer {settings.whatsapp_token}"}, timeout=15)
     if resp.status_code >= 400:
         return False, _meta_error(resp)
-    return True, "Sent via the approved template (billed at Meta's utility rate)."
+    return True, "Sent via the approved template (billed at Meta's small utility rate)."
 
 
 def send_bill(*, tenant_name: str, tenant_phone: str | None, month_label: str,
               units: float, unit_price: float, electricity_amount: float,
-              water_amount: float, total_amount: float, meter_id: str) -> SendResult:
+              water_amount: float, total_amount: float, meter_id: str,
+              prefer_template: bool = False) -> SendResult:
+    """prefer_template=True skips the free 24h-window path entirely and sends
+    via the approved template every time -- so you never have to message your
+    own number first. Billed at Meta's small utility rate (a few paise each)."""
     settings = get_settings()
     text = build_bill_text(
         building_name=settings.building_name, month_label=month_label, tenant_name=tenant_name,
@@ -167,21 +192,39 @@ def send_bill(*, tenant_name: str, tenant_phone: str | None, month_label: str,
                            self_link, forward_link)
 
     to = _digits(settings.admin_whatsapp_number)
+    tmpl_params = _template_params(
+        flat_label=tenant_name, month_label=month_label, units=units,
+        electricity_amount=electricity_amount, water_amount=water_amount,
+        total_amount=total_amount, currency=settings.currency_symbol,
+    )
+
+    if prefer_template and settings.whatsapp_template_name:
+        ok, detail = _send_template(to, tmpl_params)
+        if ok:
+            return SendResult(meter_id, tenant_name, "template", True, detail, self_link, forward_link)
+        # fall through and try the free path as a backup
+        first_detail = f"Template send failed: {detail}"
+    else:
+        first_detail = None
+
     ok, detail = _send_text(to, text)
     if ok:
         return SendResult(meter_id, tenant_name, "text", True, detail, self_link, forward_link)
+    if first_detail:
+        detail = f"{first_detail}\n{detail}"
 
-    if settings.whatsapp_template_name:
-        ok2, detail2 = _send_template(to, month_label, units, electricity_amount,
-                                       water_amount, total_amount, settings.currency_symbol)
+    if not prefer_template and settings.whatsapp_template_name:
+        ok2, detail2 = _send_template(to, tmpl_params)
         if ok2:
             return SendResult(meter_id, tenant_name, "template", True, detail2, self_link, forward_link)
         detail = f"{detail}\nTemplate attempt also failed: {detail2}"
 
     return SendResult(
         meter_id, tenant_name, "text", False,
-        f"{detail}\nTip: send any message to your WhatsApp Business number first to open "
-        "the free 24h window, then try again -- or just tap the link below.",
+        f"{detail}\nEither send any message from your phone to your WhatsApp Business "
+        "number to open the free 24h window, or approve the 'monthly_bill' template once "
+        "and turn on 'always use template' in Settings -- then this just works. "
+        "For now, tap the link below.",
         self_link, forward_link,
     )
 
