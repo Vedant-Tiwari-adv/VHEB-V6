@@ -6,7 +6,7 @@ google-api-python-client==2.157.0
 pydantic==2.10.4
 python-dotenv==1.0.1
 requests==2.32.3
-python-multipart==0.0.20
+python-multipart==0.0.31
 
 # scikit-learn + numpy are OPTIONAL -- only the RandomForest price model in
 # app/ml_pricing.py uses them, and that needs 12+ months of history before it
